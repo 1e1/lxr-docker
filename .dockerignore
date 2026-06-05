@@ -1,0 +1,9 @@
+.git
+.env
+lxr/.git
+out
+src
+patches
+*.patch
+*.md
+!config/*.md

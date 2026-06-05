@@ -1,0 +1,15 @@
+# macOS / editor cruft
+.DS_Store
+*.swp
+
+# Local configuration
+.env
+
+# LXR upstream sources (downloaded by `make install`)
+/lxr/
+
+# Code to index and static export output (keep the folders, not the content)
+/src/*
+!/src/.gitkeep
+/out/*
+!/out/.gitkeep

@@ -1,0 +1,65 @@
+# LXR + PostgreSQL. Full instructions in README.md.
+services:
+  db:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_DB: ${LXR_DB_NAME:-lxr}
+      POSTGRES_USER: ${LXR_DB_USER:-lxr}
+      POSTGRES_PASSWORD: ${LXR_DB_PASSWORD:-lxr}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LXR_DB_USER:-lxr} -d ${LXR_DB_NAME:-lxr}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  lxr:
+    build: .
+    image: lxr-docker
+    container_name: lxr
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      LXR_DB_HOST: db
+      LXR_DB_PORT: "5432"
+      LXR_DB_NAME: ${LXR_DB_NAME:-lxr}
+      LXR_DB_USER: ${LXR_DB_USER:-lxr}
+      LXR_DB_PASSWORD: ${LXR_DB_PASSWORD:-lxr}
+      LXR_REINDEX: "${LXR_REINDEX:-0}"
+    ports:
+      - "${LXR_WEB_PORT:-8080}:80"
+    volumes:
+      # The code to browse -> exposed to LXR as version "v1".
+      - type: bind
+        source: ${LXR_SOURCE_DIR:-./src}
+        target: /src/v1
+        read_only: true
+      # Full-text search index (swish-e / glimpse). The cross-reference data
+      # lives in PostgreSQL (pgdata); this volume only holds the search index.
+      - lxr_search:/var/lib/lxr
+    restart: unless-stopped
+
+  # Static HTML export. Not started by default. Use: make export
+  export:
+    profiles: ["export"]
+    image: lxr-docker
+    build: .
+    network_mode: "service:lxr"
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - >
+        echo '[lxr] Mirroring http://localhost/lxr/source into ./out ...';
+        rm -rf /out/lxr;
+        wget --mirror --page-requisites --adjust-extension --convert-links
+        --no-parent --no-host-directories -e robots=off
+        --directory-prefix=/out http://localhost/lxr/source;
+        echo '[lxr] Export done -> ./out/lxr/source'
+    volumes:
+      - ${LXR_EXPORT_DIR:-./out}:/out
+
+volumes:
+  pgdata:
+  lxr_search:
